@@ -38,7 +38,7 @@ def clear_screen():
     sys.stdout.write("\033[J")  # Clear from cursor to end of screen
 
 
-def pid_to_procname(pid: int | str) -> str:
+def pid_to_procname(pid: int) -> str:
     try:
         pid = int(pid) if not isinstance(pid, int) else pid
         p = psutil.Process(pid)
@@ -98,8 +98,8 @@ def get_gpu_info(dev_idx: int = -1) -> None:
 
 
 def render_titled_progress_bar(
-    pct: float | int,
-    title: str | None,
+    pct: float,
+    title: str,
     bar_length: int = 60,
     # fill_char: str = "█",
     fill_char: str = "|",
