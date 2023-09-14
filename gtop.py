@@ -173,12 +173,23 @@ def render_gpu_utilization(gpu: Element) -> None:
 
 def render_gpu_power(gpu: Element) -> None:
     try:
+        mod = gpu.find('gpu_power_readings')
         power_draw = float(
-            gpu.find("gpu_power_readings").find("power_draw").text.split()[0]
+            mod.find("power_draw").text.split()[0]
         )
         power_limit = float(
-            gpu.find("gpu_power_readings").find("current_power_limit").text.split()[0]
+            mod.find("current_power_limit").text.split()[0]
         )
+    except Exception:
+        mod = gpu.find('power_readings')
+        power_draw = float(
+            mod.find("power_draw").text.split()[0]
+        )
+        power_limit = float(
+            mod.find("power_limit").text.split()[0]
+        )
+        
+    try:
         power_usage_percentage = power_draw / power_limit
         render_titled_progress_bar(
             title="Power Usage ",
@@ -237,35 +248,48 @@ def pretty_print(seq: Sequence, widths: Sequence) -> None:
     print()
 
 
-def render_process_data(gpu_info: Element, simple_names: bool = False) -> None:
+def render_process_data(gpu_info: Element, verbose: bool = False) -> None:
     name_width = 50
     widths = [6, 10, name_width, 11]
 
-    for gpu in gpu_info.findall(".//gpu"):
-        gpu_id = gpu.find("minor_number").text
+    gpu_data = []
+    
+    for i, gpu in enumerate(gpu_info.findall(".//gpu")):
+        gpu_data.append({
+            'gpu_id':gpu.find("minor_number").text,
+            'pid':[],
+            'proc_name':[],
+            'mem':[],
+        })
+        # reserved memory for this GPU
         reserved_memory = gpu.find("fb_memory_usage").find("reserved").text
-        pids = []
-        proc_names = []
-        used_memorys = []
-        for i, proc in enumerate(gpu.findall("processes/process_info")):
-            pids.append(proc.find("pid").text)
-            if simple_names:
-                proc_names.append(proc.find("process_name").text)
+        gpu_data[i]['pid'].append("N/A")
+        gpu_data[i]['proc_name'].append("[reserved]")
+        gpu_data[i]['mem'].append(reserved_memory)
+        
+        # all other processes
+        for j, proc in enumerate(gpu.findall("processes/process_info")):
+            pid = proc.find("pid").text
+            gpu_data[i]['pid'].append(pid)
+            if not verbose:
+                proc_name = proc.find("process_name").text 
             else:
-                proc_names.append(pid_to_procname(int(pids[i])))
-            used_memorys.append(proc.find("used_memory").text)
-            if len(proc_names[i]) > name_width:
-                n = proc_names[i][:23]
+                proc_name = pid_to_procname(int(pid))
+            gpu_data[i]['mem'].append(proc.find("used_memory").text)
+            if len(proc_name) > name_width:
+                n = proc_name[:23]
                 n += "..."
-                n += proc_names[i][26:name_width]
-                proc_names[i] = n
+                n += proc_name[26:name_width]
+                proc_name = n
+            gpu_data[i]['proc_name'].append(proc_name)
+        
     # display
     pretty_print(["-" * 6, "-" * 10, "-" * name_width, "-" * 11], widths)
     pretty_print(["GPU ID", "Process ID", "Name", "GPU Mem"], widths)
     pretty_print(["-" * 6, "-" * 10, "-" * name_width, "-" * 11], widths)
-    pretty_print([gpu_id, "N/A", "GPU Reserved Memory", reserved_memory], widths)
-    for i in range(len(pids)):
-        pretty_print([gpu_id, pids[i], proc_names[i], used_memorys[i]], widths)
+    for d in gpu_data:
+        for i in range(len(d['proc_name'])):
+            pretty_print([d['gpu_id'], d['pid'][i], d['proc_name'][i], d['mem'][i]], widths)
     pretty_print(["-" * 6, "-" * 10, "-" * name_width, "-" * 11], widths)
 
 
@@ -288,11 +312,11 @@ def argparser():
         help="display status of a specific device (e.g., 'gtop -i 0')",
     )
     argparse.add_argument(
-        "-n",
-        "--name-only",
+        "-v",
+        "--verbose",
         dest="name",
         action="store_true",
-        help="display process names without their cmdline arguments (less verbose)",
+        help="display full process names, including command line arguments (may require elevated privileges)",
     )
     return argparse.parse_args()
 
