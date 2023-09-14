@@ -35,9 +35,9 @@ Display usage for device 0; update every 2 seconds
 
     gtop -i 0 -l 2
 
-Display usage for all connected devices; show process names only (no command line arguments)
+Display usage for all connected devices; show verbose process names
   
-    gtop -n
+    gtop -v
 
 ## License
 
