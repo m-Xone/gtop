@@ -27,7 +27,7 @@ The `loop` and `i` options mirror those of `nvidia-smi`:
                             refresh interval (s)
       -i DEVICE, --index DEVICE
                             display status of a specific device (e.g., 'gtop -i 0')
-      -n, --name-only       display process names without their cmdline arguments (less verbose)
+      -v, --verbose         display full process names, including command line arguments (may require elevated privileges)
 
 ## Examples
 
