@@ -22,7 +22,7 @@ def signal_handler(signum, frame):
     if process:
         try:
             process.terminate()
-            process.wait(timeout=5)
+            process.wait(timeout=1)
         except subprocess.TimeoutExpired:
             process.kill()
     print("exit")
