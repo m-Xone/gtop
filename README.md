@@ -15,7 +15,7 @@ Debian-based systems
 `gtop` is conveniently installed to `/usr/local/bin/gtop` via the use of PyInstaller. You can edit the Makefile to change this.
 
     git clone https://github.com/m-Xone/gtop.git
-    make build
+    make install
 
 ## Compatibility
 
