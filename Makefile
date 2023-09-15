@@ -50,14 +50,14 @@ clean:
 ENV_VERIFICATION:
 	@echo ------------START ENV VERIFICATION--------------- 
 	@if ! dpkg -s sudo | grep Status | grep -q installed; then \
-	  	@echo ERROR: sudo is not installed!; \
-	  	@exit 1; \
+	  	echo ERROR: sudo is not installed!; \
+	  	exit 1; \
 	else \
 		echo "sudo installed - PASS"; \
 	fi
 	@if ! dpkg -s sysstat | grep Status | grep -q installed; then \
-	  	@echo WARNING: sysstat package not installed. CPU usage will not be available without sysstat.; \
-	  	@read -p "Install sysstat? [y/N] " yn; \
+	  	echo WARNING: sysstat package not installed. CPU usage will not be available without sysstat.; \
+	  	read -p "Install sysstat? [y/N] " yn; \
 	  		case $$yn in \
 			[Yy]* ) sudo apt install -y sysstat;; \
 			* ) echo "Skipping sysstat installation. CPU usage will not be available in gtop.";; \
