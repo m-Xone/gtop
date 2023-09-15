@@ -206,8 +206,7 @@ def render_titled_progress_bar(
     pct: float,
     title: str,
     bar_length: int = 60,
-    fill_char: str = "█",
-    # fill_char: str = "|",
+    fill_char: str = "|",
     empty_char: str = " ",
     title_w: int = 14,
     unit: str = " ",
@@ -248,7 +247,7 @@ def render_titled_progress_bar(
     return f"{str.ljust(title[:title_w],title_w)} {unit} {bar} {epilogue[:min(len(epilogue),20)]}{sep}"
 
 
-def render_cpu_data() -> str:
+def render_cpu_data(fill_c: str) -> str:
     s = ''
     try:
         usage = [float(p) for p in get_all_cpu_usage() if p != '']
@@ -268,6 +267,7 @@ def render_cpu_data() -> str:
             s += render_titled_progress_bar(pct = float(p)/100,
                                             title=f"CPU {i}",
                                             title_w=6,
+                                            fill_char=fill_c,
                                             bar_length=bar_length,
                                             unit='%',
                                             sep='')
@@ -279,7 +279,7 @@ def render_cpu_data() -> str:
                 
 
 
-def render_gpu_memory(gpu: Element) -> str:
+def render_gpu_memory(gpu: Element, fill_c: str) -> str:
     try:
         total_memory = int(gpu.find("fb_memory_usage").find("total").text.split()[0])
         used_memory = int(gpu.find("fb_memory_usage").find("used").text.split()[0])
@@ -294,6 +294,7 @@ def render_gpu_memory(gpu: Element) -> str:
         return render_titled_progress_bar(
             title="Memory Usage",
             pct=memory_usage_percentage,
+            fill_char=fill_c,
             unit="%",
             epilogue=f"{used_memory+reserved_memory} MiB/{total_memory} MiB",
         )
@@ -301,17 +302,17 @@ def render_gpu_memory(gpu: Element) -> str:
         return f"{str.ljust('Memory Usage',16)} [data not available]\n"
 
 
-def render_gpu_utilization(gpu: Element) -> str:
+def render_gpu_utilization(gpu: Element, fill_c: str) -> str:
     try:
         utilization_gpu = int(gpu.find("utilization").find("gpu_util").text.rstrip("%"))
         return render_titled_progress_bar(
-            title="Utilization ", pct=max(0, min(utilization_gpu, 100)), unit="%"
+            title="Utilization ", pct=max(0, min(utilization_gpu, 100)), fill_char=fill_c, unit="%"
         )
     except Exception:
         return f"{str.ljust('Utilization',16)} [data not available]\n"
 
 
-def render_gpu_power(gpu: Element) -> str:
+def render_gpu_power(gpu: Element, fill_c: str) -> str:
     try:
         for k in power_nodes.keys():
             if gpu.find(k) is not None:
@@ -331,6 +332,7 @@ def render_gpu_power(gpu: Element) -> str:
         return render_titled_progress_bar(
             title="Power Usage ",
             pct=power_draw / power_limit,
+            fill_char=fill_c,
             unit="%",
             epilogue=f"{power_draw} W/{power_limit} W",
         )
@@ -338,7 +340,7 @@ def render_gpu_power(gpu: Element) -> str:
         return f"{str.ljust('Power Usage',16)} [data not available]\n"
 
 
-def render_gpu_temperature(gpu: Element) -> str:
+def render_gpu_temperature(gpu: Element, fill_c: str) -> str:
     try:
         temp = int(gpu.find("temperature").find("gpu_temp").text.split()[0])
         scale = gpu.find("temperature").find("gpu_temp").text.split()[1]
@@ -347,6 +349,7 @@ def render_gpu_temperature(gpu: Element) -> str:
         return render_titled_progress_bar(
             title="Temperature ",
             pct=temp_pct,
+            fill_char=fill_c,
             thresh=[0.6, 0.7],
             unit=scale,
             epilogue=f"{temp} {scale}",
@@ -355,7 +358,7 @@ def render_gpu_temperature(gpu: Element) -> str:
         return f"{str.ljust('Temperature',16)} [data not available]\n"
 
 
-def render_gpu_fanspeed(gpu: Element) -> str:
+def render_gpu_fanspeed(gpu: Element, fill_c: str) -> str:
     try:
         if (fanpct := gpu.find("fan_speed").text) == "N/A":
             raise ValueError("fan speed unavailable")
@@ -363,6 +366,7 @@ def render_gpu_fanspeed(gpu: Element) -> str:
         return render_titled_progress_bar(
             title="Fan Speed   ",
             pct=fanpct,
+            fill_char=fill_c,
             thresh=[0.5, 0.75],
             unit="%",
         )
@@ -384,17 +388,17 @@ def render_gpu_metadata(gpu: Element) -> str:
         return f"GPU {gpu_id}\n"
 
 
-def render_gpu_data(gpu_info: Element) -> str:
+def render_gpu_data(gpu_info: Element, fill_char: str) -> str:
     d = ""
     for gpu in gpu_info.findall(".//gpu"):
         d += line(96)
         d += "\n"
         d += render_gpu_metadata(gpu)
-        d += render_gpu_utilization(gpu)
-        d += render_gpu_memory(gpu)
-        d += render_gpu_power(gpu)
-        d += render_gpu_temperature(gpu)
-        d += render_gpu_fanspeed(gpu)
+        d += render_gpu_utilization(gpu, fill_char)
+        d += render_gpu_memory(gpu, fill_char)
+        d += render_gpu_power(gpu, fill_char)
+        d += render_gpu_temperature(gpu, fill_char)
+        d += render_gpu_fanspeed(gpu, fill_char)
         d += line(96)
         d += "\n"
     return d
@@ -502,6 +506,15 @@ def argparser():
         action="store_true",
         help="only display GPU stat bars (suppress CPU stat bars)"
     )
+    argparse.add_argument(
+        '-f',
+        '--fill-char',
+        dest='fill',
+        type=str,
+        choices=['*','|','=','o','.','+'],
+        default='█',
+        help='fill char for GPU/CPU status bars'
+    )
     return argparse.parse_args()
 
 
@@ -511,8 +524,8 @@ def main() -> None:
     try:
         while True:
             if gpu_info := get_gpu_info(args.device):
-                s = render_cpu_data() if not args.gpu else ''
-                s += render_gpu_data(gpu_info)
+                s = render_cpu_data(args.fill) if not args.gpu else ''
+                s += render_gpu_data(gpu_info, args.fill)
                 s += render_process_data(gpu_info, args.name)
                 clear_screen()
                 print(s)
