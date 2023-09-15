@@ -375,10 +375,10 @@ def render_gpu_metadata(gpu: Element) -> str:
         gpu_id = gpu.find("minor_number").text
         gpu_name = gpu.find("product_name").text
         try:
-            gpu_arch = "(" + gpu.find("product_architecture").text + ")\n"
+            gpu_arch = "(" + gpu.find("product_architecture").text + ")"
         except Exception:
             gpu_arch = ""
-        return f"GPU {gpu_id}: {gpu_name} {gpu_arch}"
+        return f"GPU {gpu_id}: {gpu_name} {gpu_arch}\n"
     except Exception:
         gpu_id = gpu.find("minor_number").text
         return f"GPU {gpu_id}\n"
