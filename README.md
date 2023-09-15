@@ -40,14 +40,15 @@ The `loop` and `i` options mirror those of `nvidia-smi`:
       -l INTERVAL, --loop INTERVAL
                             refresh interval (s)
       -i DEVICE, --index DEVICE
-                            display status of a specific device (e.g., 'gtop -i 0')
+                            display status of a single device (e.g., 'gtop -i 0')
       -v, --verbose         display full process names, including command line arguments (may require elevated privileges)
+      -g, --gpu-only        only display GPU stat bars (suppress CPU stat bars)
 
 ## Examples
 
-Display usage for device 0; update every 2 seconds
+Display usage for device 0; update every 2 seconds; only display GPU statistics
 
-    gtop -i 0 -l 2
+    gtop -i 0 -l 2 -g
 
 Display usage for all connected devices; show verbose process names
   
