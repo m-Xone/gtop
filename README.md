@@ -28,7 +28,13 @@ Debian-based systems
 
 ## Compatibility
 
-`gtop` was tested on a Linux system running Ubuntu 22.04 LTS with a single NVIDIA GPU. It _should_ run without modification on WSL and Darwin systems.
+`gtop` was tested on three systems:
+    
+1. a Linux system running Ubuntu 22.04 LTS with a single NVIDIA 4080 GPU.
+2. a Linux system running Ubuntu 22.04 LTS with two NVIDIA 4090 GPUs.
+4. a Linux system running Ubuntu 22.04 LTS with one legacy NVIDIA 5400M integrated GPU.
+
+Depending on your hardware, installed NVIDIA drivers, and `nvidia-smi` version, some status fields may not be available. These will display as `[data not available]` in place of a status bar. Additionally, for older hardware, process information may not be available. That said, it is very possible that I have not captured all variants of the XML field names from `nvidia-smi -q -x` output. If you come across a missing stat while running `gtop` locally and are able to confirm that the stat data is available under a different field name when running `nvidia-smi -q -x`, please open an Issue and I will add it.
 
 ## Usage
 
