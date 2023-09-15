@@ -25,14 +25,14 @@ endif
 all: build
 
 build:
-	python3 -m venv .venv
-	$(VENV_ACTIVATE)
-	pip install pyinstaller psutil
-	pyinstaller --onefile src/gtop.py -n gtop
+	python3 -m venv .venv && \
+	$(VENV_ACTIVATE) && \
+	pip install pyinstaller psutil && \
+	pyinstaller --onefile src/gtop.py -n gtop && \
 	$(CP_CMD) dist/gtop $(BIN_DIR)/gtop
 
 uninstall:
-	$(RM_CMD) dist build *.spec
+	$(RM_CMD) dist build *.spec && \
 	$(RM_CMD) $(BIN_DIR)/gtop
 
 clean:
