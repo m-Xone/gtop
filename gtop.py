@@ -234,6 +234,20 @@ def render_gpu_temperature(gpu: Element) -> None:
     except Exception:
         print(f"{str.ljust('Temperature',16)} [data not available]")
 
+def render_gpu_fanspeed(gpu: Element) -> None:
+    try:
+        if (fanpct := gpu.find("fan_speed").text) == "N/A":
+            raise ValueError("fan speed unavailable")
+        fanpct = int(fanpct.split()[0])
+        render_titled_progress_bar(
+            title="Fan Speed   ",
+            pct=fanpct,
+            thresh=[0.5,0.75],
+            unit='%',
+        )
+    except Exception:
+        print(f"{str.ljust('Fan Speed',16)} [data not available]")
+
 
 def render_gpu_metadata(gpu: Element) -> None:
     try:
@@ -256,6 +270,7 @@ def render_gpu_data(gpu_info: Element) -> None:
         render_gpu_memory(gpu)
         render_gpu_power(gpu)
         render_gpu_temperature(gpu)
+        render_gpu_fanspeed(gpu)
         print()
 
 
