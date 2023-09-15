@@ -18,6 +18,13 @@ Debian-based systems
     cd gtop
     make install
 
+#### Updates
+
+    git clone https://github.com/m-Xone/gtop.git
+    cd gtop
+    make uninstall
+    make install
+
 ## Compatibility
 
 `gtop` was tested on a Linux system running Ubuntu 22.04 LTS with a single NVIDIA GPU. It _should_ run without modification on WSL and Darwin systems.
