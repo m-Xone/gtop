@@ -28,7 +28,7 @@ build:
 	python3 -m venv .venv && \
 	$(VENV_ACTIVATE) && \
 	pip install pyinstaller psutil && \
-	pyinstaller --onefile src/gtop.py -n gtop && \
+	pyinstaller --onefile gtop.py -n gtop && \
 	$(CP_CMD) dist/gtop $(BIN_DIR)/gtop
 
 uninstall:
