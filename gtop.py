@@ -16,6 +16,16 @@ process = None
 class DeviceNotFoundError(Exception):
     ...
 
+power_nodes = {
+    "gpu_power_readings": {
+        "power_draw": "power_draw",
+        "power_limit": "current_power_limit",
+    },
+    "power_readings": {
+        "power_draw": "power_draw",
+        "power_limit": "power_limit",
+    },
+}
 
 def signal_handler(signum, frame):
     global process
@@ -36,6 +46,12 @@ signal.signal(signal.SIGTERM, signal_handler)
 def clear_screen():
     sys.stdout.write("\033[H")  # Move cursor to the top left
     sys.stdout.write("\033[J")  # Clear from cursor to end of screen
+
+
+def pretty_print(seq: Sequence, widths: Sequence) -> None:
+    for itm, w in zip(seq, widths):
+        print(f"{str.ljust(itm,w)}  ", end="")
+    print()
 
 
 def pid_to_procname(pid: int) -> str:
@@ -139,7 +155,7 @@ def render_titled_progress_bar(
 
     # display bar
     print(
-        f"{str.ljust(f'{title[:16]} {unit}',16)} {bar} {epilogue[:min(len(epilogue),20)]}"
+        f"{str.ljust(f'{title[:14]} {unit}',16)} {bar} {epilogue[:min(len(epilogue),20)]}"
     )
 
 
@@ -147,9 +163,13 @@ def render_gpu_memory(gpu: Element) -> None:
     try:
         total_memory = int(gpu.find("fb_memory_usage").find("total").text.split()[0])
         used_memory = int(gpu.find("fb_memory_usage").find("used").text.split()[0])
-        reserved_memory = int(
-            gpu.find("fb_memory_usage").find("reserved").text.split()[0]
-        )
+        reserved_memory = 0
+        if gpu.find("fb_memory_usage").find("reserved") is not None:
+            reserved_memory = int(
+                gpu.find("fb_memory_usage").find("reserved").text.split()[0]
+            )
+        if total_memory <= 0:
+            raise ValueError("total_memory <= 0")
         memory_usage_percentage = (used_memory + reserved_memory) / total_memory
         render_titled_progress_bar(
             title="Memory Usage",
@@ -158,7 +178,7 @@ def render_gpu_memory(gpu: Element) -> None:
             epilogue=f"{used_memory+reserved_memory} MiB/{total_memory} MiB",
         )
     except Exception:
-        print("Memory Usage [data not available]")
+        print(f"{str.ljust('Memory Usage',16)} [data not available]")
 
 
 def render_gpu_utilization(gpu: Element) -> None:
@@ -168,37 +188,34 @@ def render_gpu_utilization(gpu: Element) -> None:
             title="Utilization ", pct=max(0, min(utilization_gpu, 100)), unit="%"
         )
     except Exception:
-        print("Utilization  [data not available]")
+        print(f"{str.ljust('Utilization',16)} [data not available]")
 
 
 def render_gpu_power(gpu: Element) -> None:
     try:
-        mod = gpu.find('gpu_power_readings')
-        power_draw = float(
-            mod.find("power_draw").text.split()[0]
-        )
-        power_limit = float(
-            mod.find("current_power_limit").text.split()[0]
-        )
-    except Exception:
-        mod = gpu.find('power_readings')
-        power_draw = float(
-            mod.find("power_draw").text.split()[0]
-        )
-        power_limit = float(
-            mod.find("power_limit").text.split()[0]
-        )
-        
-    try:
-        power_usage_percentage = power_draw / power_limit
+        for k in power_nodes.keys():
+            if gpu.find(k) is not None:
+                if (
+                    power_draw := gpu.find(k).find(power_nodes[k]["power_draw"]).text
+                ) == "N/A":
+                    raise ValueError("unavailable")
+                power_draw = float(power_draw.split()[0])
+                if (
+                    power_limit := gpu.find(k).find(power_nodes[k]["power_limit"]).text
+                ) == "N/A":
+                    raise ValueError("unavailable")
+                power_limit = float(power_limit.split()[0])
+                break
+        if power_limit <= 0:
+            raise ValueError("power_limit <= 0")
         render_titled_progress_bar(
             title="Power Usage ",
-            pct=power_usage_percentage,
+            pct=power_draw / power_limit,
             unit="%",
             epilogue=f"{power_draw} W/{power_limit} W",
         )
     except Exception:
-        print("Power Usage  [data not available]")
+        print(f"{str.ljust('Power Usage',16)} [data not available]")
 
 
 def render_gpu_temperature(gpu: Element) -> None:
@@ -215,7 +232,7 @@ def render_gpu_temperature(gpu: Element) -> None:
             epilogue=f"{temp} {scale}",
         )
     except Exception:
-        print("Temperature  [data not available]")
+        print(f"{str.ljust('Temperature',16)} [data not available]")
 
 
 def render_gpu_metadata(gpu: Element) -> None:
@@ -242,54 +259,58 @@ def render_gpu_data(gpu_info: Element) -> None:
         print()
 
 
-def pretty_print(seq: Sequence, widths: Sequence) -> None:
-    for itm, w in zip(seq, widths):
-        print(f"{str.ljust(itm,w)}  ", end="")
-    print()
-
-
 def render_process_data(gpu_info: Element, verbose: bool = False) -> None:
     name_width = 50
     widths = [6, 10, name_width, 11]
 
     gpu_data = []
-    
+
     for i, gpu in enumerate(gpu_info.findall(".//gpu")):
-        gpu_data.append({
-            'gpu_id':gpu.find("minor_number").text,
-            'pid':[],
-            'proc_name':[],
-            'mem':[],
-        })
+        gpu_data.append(
+            {
+                "gpu_id": gpu.find("minor_number").text,
+                "pid": [],
+                "proc_name": [],
+                "mem": [],
+            }
+        )
         # reserved memory for this GPU
-        reserved_memory = gpu.find("fb_memory_usage").find("reserved").text
-        gpu_data[i]['pid'].append("N/A")
-        gpu_data[i]['proc_name'].append("[reserved]")
-        gpu_data[i]['mem'].append(reserved_memory)
-        
+        if gpu.find("fb_memory_usage").find("reserved") is not None:
+            reserved_memory = gpu.find("fb_memory_usage").find("reserved").text
+            gpu_data[i]["pid"].append("N/A")
+            gpu_data[i]["proc_name"].append("[reserved]")
+            gpu_data[i]["mem"].append(reserved_memory)
+
+        # check for process feature
+        if len(gpu.findall("processes/process_info")) == 0:
+            print("Process data unavailable")
+            return
+
         # all other processes
         for j, proc in enumerate(gpu.findall("processes/process_info")):
             pid = proc.find("pid").text
-            gpu_data[i]['pid'].append(pid)
+            gpu_data[i]["pid"].append(pid)
             if not verbose:
-                proc_name = proc.find("process_name").text 
+                proc_name = proc.find("process_name").text
             else:
                 proc_name = pid_to_procname(int(pid))
-            gpu_data[i]['mem'].append(proc.find("used_memory").text)
+            gpu_data[i]["mem"].append(proc.find("used_memory").text)
             if len(proc_name) > name_width:
                 n = proc_name[:23]
                 n += "..."
                 n += proc_name[26:name_width]
                 proc_name = n
-            gpu_data[i]['proc_name'].append(proc_name)
-        
+            gpu_data[i]["proc_name"].append(proc_name)
+
     # display
     pretty_print(["-" * 6, "-" * 10, "-" * name_width, "-" * 11], widths)
     pretty_print(["GPU ID", "Process ID", "Name", "GPU Mem"], widths)
     pretty_print(["-" * 6, "-" * 10, "-" * name_width, "-" * 11], widths)
     for d in gpu_data:
-        for i in range(len(d['proc_name'])):
-            pretty_print([d['gpu_id'], d['pid'][i], d['proc_name'][i], d['mem'][i]], widths)
+        for i in range(len(d["proc_name"])):
+            pretty_print(
+                [d["gpu_id"], d["pid"][i], d["proc_name"][i], d["mem"][i]], widths
+            )
     pretty_print(["-" * 6, "-" * 10, "-" * name_width, "-" * 11], widths)
 
 
