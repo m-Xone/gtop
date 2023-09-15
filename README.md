@@ -33,7 +33,7 @@ Debian-based systems
 
 The `loop` and `i` options mirror those of `nvidia-smi`:
 
-    usage: gtop [-h] [-l INTERVAL] [-i DEVICE] [-n]
+    usage: gtop [-h] [-l INTERVAL] [-i DEVICE] [-v] [-g] [-f {*,|,=,o,.,+}]
 
     options:
       -h, --help            show this help message and exit
@@ -43,6 +43,10 @@ The `loop` and `i` options mirror those of `nvidia-smi`:
                             display status of a single device (e.g., 'gtop -i 0')
       -v, --verbose         display full process names, including command line arguments (may require elevated privileges)
       -g, --gpu-only        only display GPU stat bars (suppress CPU stat bars)
+      -f {*,|,=,o,.,+}, --fill-char {*,|,=,o,.,+}
+                            fill char for GPU/CPU status bars
+
+      
 
 ## Examples
 
