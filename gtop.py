@@ -524,14 +524,16 @@ def main() -> None:
     try:
         while True:
             if gpu_info := get_gpu_info(args.device):
+                start = time.time()
                 s = render_cpu_data(args.fill) if not args.gpu else ''
                 s += render_gpu_data(gpu_info, args.fill)
                 s += render_process_data(gpu_info, args.name)
                 clear_screen()
                 print(s)
+                end = time.time()
             else:
                 raise RuntimeError("failed to process data update")
-            time.sleep(args.interval)
+            time.sleep(max(0, args.interval - (end-start)))
     except Exception:
         sys.exit(1)
 
