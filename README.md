@@ -1,7 +1,8 @@
 # gtop
+
 Simple wrapper for nvidia-smi that offers improved visuals for better GPU resource awareness
 
-![example](https://github.com/m-Xone/gtop/assets/19239090/528b4bfb-13dd-4038-886f-09197c319f9b)
+![Screenshot from 2023-09-15 15-18-23](https://github.com/m-Xone/gtop/assets/19239090/b7f0b699-61fb-4280-a232-f31d0e418096)
 
 
 ## Installation
