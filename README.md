@@ -8,7 +8,21 @@ Simple wrapper for nvidia-smi that offers improved visuals for better GPU resour
 
 #### Prerequisites
 
-    sudo apt install build-essential python3-pip python3-dev python3-venv
+Debian-based systems
+
+    sudo apt update && sudo apt install build-essential python3-pip python3-dev python3-venv
+
+RHL/CentOS systems
+
+    sudo yum update && sudo yum install python3-venv python3-pip make gcc gcc-c++ python3-devel
+
+OR
+
+    sudo dnf update && sudo dnf install python3-venv python3-pip make gcc gcc-c++ python3-devel
+
+ArchLinux
+
+    sudo pacman -Syu && sudo pacman -S python-venv python-pip make base-devel
 
 `gtop` is conveniently installed to `/usr/local/bin/gtop` via the use of PyInstaller. You can edit the Makefile to change this.
 
