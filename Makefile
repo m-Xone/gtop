@@ -24,7 +24,7 @@ endif
 # Targets
 all: build install
 
-build:
+build: ENV_VERIFICATION
 	python3 -m venv .venv && \
 	$(VENV_ACTIVATE) && \
 	pip install pyinstaller psutil && \
@@ -38,8 +38,31 @@ install: build
 	esac
 
 uninstall:
-	$(RM_CMD) dist build *.spec
-	$(RM_CMD) $(BIN_DIR)/gtop
+	@read -p "Uninstall $(BIN_DIR)/gtop. Proceed? [y/N] " yn; \
+	case $$yn in \
+		[Yy]* ) sudo $(RM_CMD) dist build *.spec $(BIN_DIR)/gtop;; \
+		* ) echo "Uninstall canceled.";; \
+	esac
 
 clean:
 	$(RM_CMD) dist build *.spec
+
+ENV_VERIFICATION:
+	@echo ------------START ENV VERIFICATION--------------- 
+	@if ! dpkg -s sudo | grep Status | grep -q installed; then \
+	  	@echo ERROR: sudo is not installed!; \
+	  	@exit 1; \
+	else \
+		echo "sudo installed - PASS"; \
+	fi
+	@if ! dpkg -s sysstat | grep Status | grep -q installed; then \
+	  	@echo WARNING: sysstat package not installed. CPU usage will not be available without sysstat.; \
+	  	@read -p "Install sysstat? [y/N] " yn; \
+	  		case $$yn in \
+			[Yy]* ) sudo apt install -y sysstat;; \
+			* ) echo "Skipping sysstat installation. CPU usage will not be available in gtop.";; \
+			esac \
+	else \
+		echo "sysstat installed - PASS"; \
+	fi
+	@echo ------------END ENV VERIFICATION---------------
