@@ -10,7 +10,7 @@ Simple wrapper for nvidia-smi that offers improved visuals for better GPU resour
 
 Debian-based systems
 
-    sudo apt update && sudo apt install build-essential python3-pip python3-dev python3-venv
+    sudo apt update && sudo apt install sysstat build-essential python3-pip python3-dev python3-venv
 
 `gtop` is conveniently installed to `/usr/local/bin/gtop` via the use of PyInstaller. You can edit the Makefile to change this.
 
