@@ -58,6 +58,10 @@ def pretty_print(seq: Sequence, widths: Sequence) -> str:
     return s
 
 
+def line(w: int = 50) -> str:
+    return "\u2500" * w
+
+
 def get_all_cpu_usage() -> list[float]:
     global process
     err_msg = 'no results'
@@ -205,7 +209,8 @@ def render_titled_progress_bar(
     fill_char: str = "█",
     # fill_char: str = "|",
     empty_char: str = " ",
-    unit: str = "",
+    title_w: int = 14,
+    unit: str = " ",
     thresh: Sequence = [0.5, 0.9],
     epilogue: str = "",
     sep = "\n",
@@ -240,24 +245,29 @@ def render_titled_progress_bar(
     bar += empty_char * empty + "]"
 
     # display bar
-    return f"{str.ljust(f'{title[:14]} {unit}',16)} {bar} {epilogue[:min(len(epilogue),20)]}{sep}"
+    return f"{str.ljust(title[:title_w],title_w)} {unit} {bar} {epilogue[:min(len(epilogue),20)]}{sep}"
 
 
 def render_cpu_data() -> str:
     s = ''
     try:
         usage = [float(p) for p in get_all_cpu_usage() if p != '']
+        if len(usage) <= 0:
+            raise ValueError('nothing to display')
+        s += line(96)
+        s += "\n"
         n_cols = 2
-        bar_length = 30
+        bar_length = 35
         if len(usage) > 16:
             n_cols = 3
-            bar_length = 12
+            bar_length = 20
         if len(usage) > 24:
             n_cols = 4
-            bar_length = 8
+            bar_length = 12
         for i,p in enumerate(usage):
             s += render_titled_progress_bar(pct = float(p)/100,
                                             title=f"CPU {i}",
+                                            title_w=6,
                                             bar_length=bar_length,
                                             unit='%',
                                             sep='')
@@ -377,12 +387,15 @@ def render_gpu_metadata(gpu: Element) -> str:
 def render_gpu_data(gpu_info: Element) -> str:
     d = ""
     for gpu in gpu_info.findall(".//gpu"):
+        d += line(96)
+        d += "\n"
         d += render_gpu_metadata(gpu)
         d += render_gpu_utilization(gpu)
         d += render_gpu_memory(gpu)
         d += render_gpu_power(gpu)
         d += render_gpu_temperature(gpu)
         d += render_gpu_fanspeed(gpu)
+        d += line(96)
         d += "\n"
     return d
 
@@ -436,9 +449,10 @@ def render_process_data(gpu_info: Element, verbose: bool = False) -> str:
             gpu_data[i]["proc_name"].append(proc_name)
 
     # display
-    s = pretty_print(["-" * 6, "-" * 10, "-" * name_width, "-" * 7, "-" * 11], widths)
+    s = line(96)
+    s += "\n"
     s += pretty_print(["GPU ID", "Process ID", "Name", "CPU %", "GPU Mem"], widths)
-    s += pretty_print(["-" * 6, "-" * 10, "-" * name_width, "-" * 7, "-" * 11], widths)
+    s += pretty_print([line(6), line(10), line(name_width), line(7), line(11)], widths)
     for d in gpu_data:
         for i in range(len(d["proc_name"])):
             s += pretty_print(
@@ -451,7 +465,8 @@ def render_process_data(gpu_info: Element, verbose: bool = False) -> str:
                 ],
                 widths,
             )
-    s += pretty_print(["-" * 6, "-" * 10, "-" * name_width, "-" * 7, "-" * 11], widths)
+    s += line(96)
+    s += "\n"
     return s
 
 
