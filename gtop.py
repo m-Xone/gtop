@@ -247,14 +247,22 @@ def render_cpu_data() -> str:
     s = ''
     try:
         usage = [float(p) for p in get_all_cpu_usage() if p != '']
+        n_cols = 2
+        bar_length = 30
+        if len(usage) > 16:
+            n_cols = 3
+            bar_length = 12
+        if len(usage) > 24:
+            n_cols = 4
+            bar_length = 8
         for i,p in enumerate(usage):
             s += render_titled_progress_bar(pct = float(p)/100,
                                             title=f"CPU {i}",
-                                            bar_length=30,
+                                            bar_length=bar_length,
                                             unit='%',
                                             sep='')
-            s = s + '\n' if (i+1) % 2 == 0 else s
-        s += '\n'
+            s = s + '\n' if (i+1) % n_cols == 0 else s
+        s += '\n\n'
         return s
     except Exception:
         return s
@@ -463,7 +471,7 @@ def argparser():
         dest="device",
         type=int,
         default=-1,
-        help="display status of a specific device (e.g., 'gtop -i 0')",
+        help="display status of a single device (e.g., 'gtop -i 0')",
     )
     argparse.add_argument(
         "-v",
@@ -477,7 +485,7 @@ def argparser():
         "--gpu-only",
         dest="gpu",
         action="store_true",
-        help="only display GPU stat bars (suppress CPU usage bars)"
+        help="only display GPU stat bars (suppress CPU stat bars)"
     )
     return argparse.parse_args()
 
