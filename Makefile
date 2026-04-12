@@ -28,7 +28,7 @@ build: ENV_VERIFICATION
 	python3 -m venv .venv && \
 	$(VENV_ACTIVATE) && \
 	pip install pyinstaller psutil && \
-	pyinstaller --onefile gtop.py -n gtop
+	pyinstaller --onefile main.py -n gtop
 
 install: build
 	@read -p "Installing to $(BIN_DIR)/gtop. Proceed? [y/N] " yn; \
