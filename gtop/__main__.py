@@ -1,4 +1,5 @@
 """Support ``python -m gtop``."""
+
 import sys
 
 from gtop.cli import main

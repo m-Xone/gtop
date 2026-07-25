@@ -1,7 +1,8 @@
 """Panel renderers: turn collector output into structured lines of segments."""
+
 from __future__ import annotations
 
-from typing import Iterable, List, Sequence, Tuple
+from collections.abc import Iterable, Sequence
 from xml.etree.ElementTree import Element
 
 from .collectors import process_cpu_percent, process_name
@@ -27,7 +28,8 @@ def _unavailable(label: str, title_w: int = 16) -> Line:
 # CPU panel
 # ---------------------------------------------------------------------------
 
-def _cpu_grid(n_cores: int) -> Tuple[int, int]:
+
+def _cpu_grid(n_cores: int) -> tuple[int, int]:
     """Return ``(columns, bar_length)`` sized for the number of cores."""
     if n_cores > 24:
         return 4, 12
@@ -36,16 +38,14 @@ def _cpu_grid(n_cores: int) -> Tuple[int, int]:
     return 2, 35
 
 
-def render_cpu(
-    usage: Sequence[float], fill_char: str, screen_width: int
-) -> List[Line]:
+def render_cpu(usage: Sequence[float], fill_char: str, screen_width: int) -> list[Line]:
     if not usage:
         return []
 
     n_cols, bar_length = _cpu_grid(len(usage))
     width = _frame_width(screen_width)
 
-    bars: List[Line] = [
+    bars: list[Line] = [
         ProgressBar(
             title=f"CPU {i}",
             pct=pct / 100.0,
@@ -57,10 +57,10 @@ def render_cpu(
         for i, pct in enumerate(usage)
     ]
 
-    lines: List[Line] = [hrule(width)]
+    lines: list[Line] = [hrule(width)]
     for start in range(0, len(bars), n_cols):
         group = bars[start : start + n_cols]
-        combined: List[Segment] = []
+        combined: list[Segment] = []
         for j, bar in enumerate(group):
             if j > 0:
                 combined.append(plain(" "))
@@ -76,7 +76,7 @@ def render_cpu(
 
 # nvidia-smi's XML schema has drifted across driver versions; power metrics
 # may live in either ``<gpu_power_readings>`` or ``<power_readings>``.
-_POWER_SECTIONS: Tuple[Tuple[str, str, str], ...] = (
+_POWER_SECTIONS: tuple[tuple[str, str, str], ...] = (
     # (section_tag, draw_tag, limit_tag)
     ("gpu_power_readings", "power_draw", "current_power_limit"),
     ("power_readings", "power_draw", "power_limit"),
@@ -89,9 +89,7 @@ def _memory_bar(gpu: Element, fill_char: str) -> Line:
         total = int(mem.find("total").text.split()[0])
         used = int(mem.find("used").text.split()[0])
         reserved_elt = mem.find("reserved")
-        reserved = (
-            int(reserved_elt.text.split()[0]) if reserved_elt is not None else 0
-        )
+        reserved = int(reserved_elt.text.split()[0]) if reserved_elt is not None else 0
         if total <= 0:
             raise ValueError
         return ProgressBar(
@@ -178,25 +176,30 @@ def _fan_bar(gpu: Element, fill_char: str) -> Line:
         return _unavailable("Fan Speed")
 
 
+def _text(node: Element | None, default: str = "N/A") -> str:
+    """Return an element's text, or *default* when the node or text is missing.
+
+    ElementTree yields ``None`` for absent nodes and for present-but-empty
+    ones; without this, those would reach the screen as the literal "None".
+    """
+    if node is None or node.text is None:
+        return default
+    return node.text
+
+
 def _gpu_header(gpu: Element) -> Line:
-    gpu_id = gpu.find("minor_number").text
+    gpu_id = _text(gpu.find("minor_number"), "?")
     name_elt = gpu.find("product_name")
     arch_elt = gpu.find("product_architecture")
     if name_elt is not None and name_elt.text:
-        arch = (
-            f"({arch_elt.text})"
-            if arch_elt is not None and arch_elt.text
-            else ""
-        )
+        arch = f"({arch_elt.text})" if arch_elt is not None and arch_elt.text else ""
         return (plain(f"GPU {gpu_id}: {name_elt.text} {arch}"),)
     return (plain(f"GPU {gpu_id}"),)
 
 
-def render_gpu(
-    gpu_info: Element, fill_char: str, screen_width: int
-) -> List[Line]:
+def render_gpu(gpu_info: Element, fill_char: str, screen_width: int) -> list[Line]:
     width = _frame_width(screen_width)
-    lines: List[Line] = []
+    lines: list[Line] = []
     for gpu in gpu_info.findall(".//gpu"):
         lines.append(hrule(width))
         lines.append(_gpu_header(gpu))
@@ -214,9 +217,13 @@ def render_gpu(
 # ---------------------------------------------------------------------------
 
 _NAME_WIDTH = 50
-_PROC_WIDTHS: Tuple[int, ...] = (6, 10, _NAME_WIDTH, 7, 11)
-_PROC_HEADERS: Tuple[str, ...] = (
-    "GPU ID", "Process ID", "Name", "CPU %", "GPU Mem",
+_PROC_WIDTHS: tuple[int, ...] = (6, 10, _NAME_WIDTH, 7, 11)
+_PROC_HEADERS: tuple[str, ...] = (
+    "GPU ID",
+    "Process ID",
+    "Name",
+    "CPU %",
+    "GPU Mem",
 )
 
 
@@ -227,47 +234,46 @@ def _truncate_name(name: str) -> str:
     return name[:23] + "..." + name[26:_NAME_WIDTH]
 
 
-def _iter_proc_rows(gpu: Element, verbose: bool) -> Iterable[Tuple[str, ...]]:
-    gpu_id = gpu.find("minor_number").text
+def _iter_proc_rows(gpu: Element, verbose: bool) -> Iterable[tuple[str, ...]]:
+    gpu_id = _text(gpu.find("minor_number"), "?")
     mem = gpu.find("fb_memory_usage")
 
     reserved_elt = mem.find("reserved") if mem is not None else None
     if reserved_elt is not None:
-        yield gpu_id, "N/A", "[reserved]", "N/A", reserved_elt.text
+        yield gpu_id, "N/A", "[reserved]", "N/A", _text(reserved_elt)
 
     for proc in gpu.findall("processes/process_info"):
-        pid_txt = proc.find("pid").text
+        pid_txt = _text(proc.find("pid"), "")
         try:
             pid = int(pid_txt)
-        except (TypeError, ValueError):
+        except ValueError:
             continue
 
         cpu_pct = process_cpu_percent(pid)
         cpu_cell = "N/A" if cpu_pct is None else str(cpu_pct)
 
-        if verbose:
-            name = process_name(pid, verbose=True)
-        else:
-            name_elt = proc.find("process_name")
-            name = (
-                name_elt.text
-                if name_elt is not None and name_elt.text
-                else "unavailable"
-            )
+        name = (
+            process_name(pid, verbose=True)
+            if verbose
+            else _text(proc.find("process_name"), "unavailable")
+        )
 
-        used_mem = proc.find("used_memory").text
-        yield gpu_id, pid_txt, _truncate_name(name), cpu_cell, used_mem
+        yield (
+            gpu_id,
+            pid_txt,
+            _truncate_name(name),
+            cpu_cell,
+            _text(proc.find("used_memory")),
+        )
 
 
-def render_processes(
-    gpu_info: Element, verbose: bool, screen_width: int
-) -> List[Line]:
+def render_processes(gpu_info: Element, verbose: bool, screen_width: int) -> list[Line]:
     gpus = gpu_info.findall(".//gpu")
     if not any(gpu.findall("processes/process_info") for gpu in gpus):
         return [(plain("Process data unavailable"),)]
 
     width = _frame_width(screen_width)
-    lines: List[Line] = [
+    lines: list[Line] = [
         hrule(width),
         row(_PROC_HEADERS, _PROC_WIDTHS),
         row(tuple("\u2500" * w for w in _PROC_WIDTHS), _PROC_WIDTHS),

@@ -5,52 +5,57 @@ lives in an off-screen :func:`curses.newpad` and the visible region is a
 scrollable viewport onto it. This lets the view layer emit as many lines as
 it likes without worrying about the terminal size.
 """
+
 from __future__ import annotations
 
+import contextlib
 import curses
-from typing import List, Optional, Sequence, Tuple
+from collections.abc import Sequence
 
-from .widgets import Color, Line, Segment, line_width
+from .widgets import Color, Line, line_width
 
-# A Frame is the full ordered collection of lines making up one "screen".
+#: The full ordered collection of lines making up one rendered screen.
 Frame = Sequence[Line]
 
 
-# Map semantic colors → curses color-pair indices. Pair 0 is reserved for
-# the terminal default, so non-default entries start at 1.
-_COLOR_PAIRS: dict = {
+# Map semantic colors → curses color-pair indices. Pair 0 is reserved for the
+# terminal default, so non-default entries start at 1.
+_COLOR_PAIRS: dict[Color, int] = {
     Color.RED: 1,
     Color.GREEN: 2,
     Color.YELLOW: 3,
     Color.BLUE: 4,
 }
 
-_CURSES_FG: dict = {
+_CURSES_FG: dict[Color, int] = {
     Color.RED: curses.COLOR_RED,
     Color.GREEN: curses.COLOR_GREEN,
     Color.YELLOW: curses.COLOR_YELLOW,
     Color.BLUE: curses.COLOR_BLUE,
 }
 
+#: Horizontal scroll step, in columns, for the left/right keys.
+HSCROLL_STEP = 4
+
 
 class CursesRenderer:
     """Draws a :data:`Frame` into a curses window, with scrolling support."""
 
-    def __init__(self, stdscr) -> None:
+    def __init__(self, stdscr: curses.window) -> None:
         self._stdscr = stdscr
-        self._pad = None
-        self._pad_size: Tuple[int, int] = (0, 0)
+        self._pad: curses.window | None = None
+        self._pad_size: tuple[int, int] = (0, 0)
         self._scroll_y = 0
         self._scroll_x = 0
+        self._content_size: tuple[int, int] = (0, 0)
 
     # ---- lifecycle -------------------------------------------------------
 
     def setup(self) -> None:
         """Configure the curses window for rendering."""
-        try:
+        # Not every terminal supports hiding the cursor.
+        with contextlib.suppress(curses.error):
             curses.curs_set(0)
-        except curses.error:
-            pass
         self._stdscr.keypad(True)
         if curses.has_colors():
             try:
@@ -59,101 +64,115 @@ class CursesRenderer:
                 for color, pair in _COLOR_PAIRS.items():
                     curses.init_pair(pair, _CURSES_FG[color], -1)
             except curses.error:
-                pass  # Degrade gracefully on color-less terminals.
+                pass  # Degrade to monochrome rather than failing to start.
 
     # ---- drawing ---------------------------------------------------------
 
     def draw(self, frame: Frame) -> None:
         """Render ``frame`` into the pad, then refresh the viewport."""
-        content_rows = max(1, len(frame))
-        content_cols = max(
-            1, max((line_width(line) for line in frame), default=1)
-        )
-        self._ensure_pad(content_rows, content_cols)
-        assert self._pad is not None
+        rows = max(1, len(frame))
+        cols = max(1, max((line_width(line) for line in frame), default=1))
+        self._content_size = (rows, cols)
+        self._ensure_pad(rows, cols)
+        pad = self._pad
+        assert pad is not None
 
-        self._pad.erase()
+        pad.erase()
         for y, line in enumerate(frame):
             x = 0
             for seg in line:
                 if not seg.text:
                     continue
-                try:
-                    self._pad.addstr(y, x, seg.text, self._attr(seg.color))
+                # Writing to the last cell of a pad raises; truncation at
+                # the content edge is the desired behavior here. Kept as a bare
+                # try/except rather than contextlib.suppress: this runs once
+                # per segment per frame.
+                try:  # noqa: SIM105
+                    pad.addstr(y, x, seg.text, self._attr(seg.color))
                 except curses.error:
-                    # Writes beyond the pad raise; truncation is fine here.
                     pass
                 x += len(seg.text)
 
-        self._blit(content_rows, content_cols)
+        self._blit()
 
     def draw_message(self, msg: str) -> None:
         """Clear the screen and display a single-line status message."""
         self._stdscr.erase()
-        try:
-            self._stdscr.addnstr(0, 0, msg, self._screen_width() - 1)
-        except curses.error:
-            pass
+        width = self._screen_size()[1]
+        with contextlib.suppress(curses.error):
+            self._stdscr.addnstr(0, 0, msg, max(1, width - 1))
         self._stdscr.refresh()
 
     # ---- scrolling -------------------------------------------------------
 
     def scroll(self, dy: int = 0, dx: int = 0) -> None:
+        """Move the viewport by a relative offset."""
         self._scroll_y += dy
         self._scroll_x += dx
+        self._clamp_scroll()
 
     def scroll_to(self, y: int = 0, x: int = 0) -> None:
+        """Move the viewport to an absolute offset."""
         self._scroll_y = y
         self._scroll_x = x
+        self._clamp_scroll()
+
+    def scroll_to_bottom(self) -> None:
+        """Move the viewport to the last page of content."""
+        self._scroll_y = self._content_size[0]
+        self._clamp_scroll()
+
+    @property
+    def scroll_offset(self) -> tuple[int, int]:
+        """The current ``(y, x)`` viewport offset."""
+        return self._scroll_y, self._scroll_x
+
+    def page_size(self) -> int:
+        """Number of lines to move for a page-up/page-down keypress."""
+        return max(1, int(self._screen_size()[0] * 0.9))
 
     # ---- internals -------------------------------------------------------
 
     def _attr(self, color: Color) -> int:
-        if color is Color.DEFAULT:
-            return 0
         pair = _COLOR_PAIRS.get(color)
         if pair is None:
             return 0
         try:
             return curses.color_pair(pair)
         except curses.error:
-            return 0
+            return 0  # Color pairs unavailable (monochrome terminal).
 
-    def _screen_size(self) -> Tuple[int, int]:
+    def _screen_size(self) -> tuple[int, int]:
         height, width = self._stdscr.getmaxyx()
         return max(1, height), max(1, width)
 
-    def _screen_width(self) -> int:
-        return self._screen_size()[1]
-
     def _ensure_pad(self, content_rows: int, content_cols: int) -> None:
         height, width = self._screen_size()
-        # Pad must be at least as large as the visible window, plus enough
-        # room for the full content so we can scroll.
+        # The pad must cover the content and be at least as large as the
+        # visible window, so a short frame still fills the screen.
         pad_rows = max(content_rows + 1, height)
         pad_cols = max(content_cols + 1, width)
         if self._pad is None or self._pad_size != (pad_rows, pad_cols):
             self._pad = curses.newpad(pad_rows, pad_cols)
             self._pad_size = (pad_rows, pad_cols)
 
-    def _blit(self, content_rows: int, content_cols: int) -> None:
+    def _clamp_scroll(self) -> None:
         height, width = self._screen_size()
-        # Clamp scroll offsets to valid range.
-        self._scroll_y = max(0, min(self._scroll_y, max(0, content_rows - height)))
-        self._scroll_x = max(0, min(self._scroll_x, max(0, content_cols - width)))
+        rows, cols = self._content_size
+        self._scroll_y = max(0, min(self._scroll_y, max(0, rows - height)))
+        self._scroll_x = max(0, min(self._scroll_x, max(0, cols - width)))
+
+    def _blit(self) -> None:
+        height, width = self._screen_size()
+        self._clamp_scroll()
 
         self._stdscr.erase()
         self._stdscr.noutrefresh()
+        pad = self._pad
+        if pad is None:
+            return
         try:
-            assert self._pad is not None
-            self._pad.noutrefresh(
-                self._scroll_y,
-                self._scroll_x,
-                0,
-                0,
-                height - 1,
-                width - 1,
-            )
+            pad.noutrefresh(self._scroll_y, self._scroll_x, 0, 0, height - 1, width - 1)
             curses.doupdate()
         except curses.error:
-            pass
+            pass  # Window too small to blit into; skip this frame.

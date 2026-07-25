@@ -3,12 +3,13 @@
 Collectors do I/O; they do not format. Views consume the plain-data values
 returned here and shape them into text.
 """
+
 from __future__ import annotations
 
 import subprocess
 import time
 import xml.etree.ElementTree as ET
-from typing import List, Optional
+from typing import Protocol
 from xml.etree.ElementTree import Element
 
 import psutil
@@ -22,6 +23,21 @@ class NvidiaSmiNotInstalledError(RuntimeError):
     """Raised when the ``nvidia-smi`` binary cannot be found on ``PATH``."""
 
 
+class CPUSource(Protocol):
+    """Anything that can report per-core utilization percentages."""
+
+    def collect(self) -> list[float]: ...
+
+
+class GPUSource(Protocol):
+    """Anything that can report an ``nvidia-smi``-shaped XML tree.
+
+    ``None`` signals a transient failure the caller should retry.
+    """
+
+    def collect(self) -> Element | None: ...
+
+
 class CPUCollector:
     """Per-CPU utilization via :mod:`psutil`.
 
@@ -33,7 +49,7 @@ class CPUCollector:
     def __init__(self) -> None:
         psutil.cpu_percent(percpu=True, interval=None)
 
-    def collect(self) -> List[float]:
+    def collect(self) -> list[float]:
         return list(psutil.cpu_percent(percpu=True, interval=None))
 
 
@@ -49,7 +65,7 @@ class GPUCollector:
         self._device = device
         self._timeout = timeout
 
-    def collect(self) -> Optional[Element]:
+    def collect(self) -> Element | None:
         args = ["nvidia-smi", "-q", "-x"]
         if self._device >= 0:
             args += ["-i", str(self._device)]
@@ -94,7 +110,7 @@ def process_name(pid: int, verbose: bool = True) -> str:
         return "unavailable"
 
 
-def process_cpu_percent(pid: int) -> Optional[float]:
+def process_cpu_percent(pid: int) -> float | None:
     """Return the process's lifetime CPU%, equivalent to ``ps -o %cpu``.
 
     Computed as ``(user + system) / elapsed * 100`` against wall clock. Returns

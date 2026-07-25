@@ -5,11 +5,12 @@ objects, each tagged with a semantic :class:`Color`. A renderer (curses,
 ANSI, plain text, …) is responsible for turning segments into actual
 on-screen output. No ANSI, no curses, no I/O in this module.
 """
+
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable, Sequence, Tuple
 
 
 class Color(Enum):
@@ -32,7 +33,7 @@ class Segment:
 
 # A Line is a sequence of segments with no trailing newline; the renderer
 # handles vertical placement.
-Line = Tuple[Segment, ...]
+Line = tuple[Segment, ...]
 
 
 def plain(text: str) -> Segment:
