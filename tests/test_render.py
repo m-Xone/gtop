@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import curses
+import sys
 
 import pytest
 
@@ -44,6 +45,84 @@ class TestSetup:
 
         monkeypatch.setattr(curses, "curs_set", _boom)
         CursesRenderer(make_screen()).setup()  # must not raise
+
+
+class TestColorSetup:
+    """Color negotiation, including the PDCurses/windows-curses fallback."""
+
+    @pytest.fixture
+    def pairs(self, fake_curses, monkeypatch):
+        """Record every successful init_pair(pair, fg, bg) call."""
+        recorded: list[tuple[int, int, int]] = []
+        monkeypatch.setattr(
+            curses,
+            "init_pair",
+            lambda pair, fg, bg: recorded.append((pair, fg, bg)),
+        )
+        return recorded
+
+    def test_prefers_the_inherited_terminal_background(self, pairs, make_screen):
+        CursesRenderer(make_screen()).setup()
+        assert len(pairs) == len(_COLOR_PAIRS)
+        assert {bg for _, _, bg in pairs} == {-1}
+
+    def test_falls_back_to_black_when_the_terminal_cannot_inherit(
+        self, pairs, make_screen, monkeypatch
+    ):
+        """PDCurses has no use_default_colors; color must survive anyway."""
+
+        def _boom():
+            raise curses.error("use_default_colors unsupported")
+
+        monkeypatch.setattr(curses, "use_default_colors", _boom)
+        CursesRenderer(make_screen()).setup()
+        assert len(pairs) == len(_COLOR_PAIRS)
+        assert {bg for _, _, bg in pairs} == {curses.COLOR_BLACK}
+
+    def test_falls_back_to_black_when_a_minus_one_background_is_rejected(
+        self, fake_curses, make_screen, monkeypatch
+    ):
+        """PDCurses accepts use_default_colors but rejects -1 in init_pair."""
+        recorded: list[tuple[int, int, int]] = []
+
+        def _init_pair(pair, fg, bg):
+            if bg == -1:
+                raise curses.error("bad background")
+            recorded.append((pair, fg, bg))
+
+        monkeypatch.setattr(curses, "init_pair", _init_pair)
+        CursesRenderer(make_screen()).setup()
+        assert len(recorded) == len(_COLOR_PAIRS)
+        assert {bg for _, _, bg in recorded} == {curses.COLOR_BLACK}
+
+    def test_every_semantic_color_gets_a_pair(self, pairs, make_screen):
+        CursesRenderer(make_screen()).setup()
+        assert {p for p, _, _ in pairs} == set(_COLOR_PAIRS.values())
+
+    def test_no_pairs_are_registered_without_color_support(
+        self, pairs, make_screen, monkeypatch
+    ):
+        monkeypatch.setattr(curses, "has_colors", lambda: False)
+        CursesRenderer(make_screen()).setup()
+        assert pairs == []
+
+    def test_no_pairs_are_registered_when_start_color_fails(
+        self, pairs, make_screen, monkeypatch
+    ):
+        def _boom():
+            raise curses.error("start_color failed")
+
+        monkeypatch.setattr(curses, "start_color", _boom)
+        CursesRenderer(make_screen()).setup()
+        assert pairs == []
+
+    def test_monochrome_setup_still_renders(
+        self, fake_curses, make_screen, monkeypatch
+    ):
+        monkeypatch.setattr(curses, "has_colors", lambda: False)
+        r = CursesRenderer(make_screen())
+        r.setup()
+        r.draw([(colored("x", Color.RED),)])  # must not raise
 
 
 class TestDraw:
@@ -251,10 +330,12 @@ class TestDegenerateWindows:
 
 
 @pytest.mark.tty
+@pytest.mark.skipif(sys.platform == "win32", reason="pty is Unix-only")
 class TestAgainstRealCurses:
     """Exercise the real curses stack inside a pty.
 
-    Skipped where a terminal cannot be allocated (some CI sandboxes).
+    Skipped on Windows, and where a terminal cannot be allocated (some CI
+    sandboxes).
     """
 
     def test_full_render_cycle(self, modern_gpu):

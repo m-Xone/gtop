@@ -37,6 +37,11 @@ _CURSES_FG: dict[Color, int] = {
 #: Horizontal scroll step, in columns, for the left/right keys.
 HSCROLL_STEP = 4
 
+#: Background that inherits the terminal's own color. ncurses supports this
+#: after use_default_colors(); PDCurses (windows-curses) does not, so the
+#: renderer falls back to an explicit black background.
+_INHERIT_BACKGROUND = -1
+
 
 class CursesRenderer:
     """Draws a :data:`Frame` into a curses window, with scrolling support."""
@@ -57,14 +62,35 @@ class CursesRenderer:
         with contextlib.suppress(curses.error):
             curses.curs_set(0)
         self._stdscr.keypad(True)
-        if curses.has_colors():
+        self._init_colors()
+
+    @staticmethod
+    def _init_colors() -> None:
+        """Register color pairs, degrading to monochrome if unavailable.
+
+        Tries the terminal's own background first, then an explicit black.
+        The second attempt is what makes color work under PDCurses, which
+        windows-curses builds on and which rejects a -1 background.
+        """
+        if not curses.has_colors():
+            return
+        try:
+            curses.start_color()
+        except curses.error:
+            return  # No color support at all; monochrome is fine.
+
+        for background in (_INHERIT_BACKGROUND, curses.COLOR_BLACK):
+            if background == _INHERIT_BACKGROUND:
+                try:
+                    curses.use_default_colors()
+                except curses.error:
+                    continue  # Terminal can't inherit; try explicit black.
             try:
-                curses.start_color()
-                curses.use_default_colors()
                 for color, pair in _COLOR_PAIRS.items():
-                    curses.init_pair(pair, _CURSES_FG[color], -1)
+                    curses.init_pair(pair, _CURSES_FG[color], background)
+                return
             except curses.error:
-                pass  # Degrade to monochrome rather than failing to start.
+                continue  # Fall through to the next background candidate.
 
     # ---- drawing ---------------------------------------------------------
 

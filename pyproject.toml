@@ -11,13 +11,18 @@ requires-python = ">=3.9"
 license = { text = "GPL-3.0-or-later" }
 authors = [{ name = "m-Xone" }]
 keywords = ["gpu", "nvidia", "monitoring", "curses", "tui", "nvidia-smi"]
-dependencies = ["psutil>=5.9"]
+dependencies = [
+    "psutil>=5.9",
+    # Windows has no curses in its standard library; this supplies _curses.
+    "windows-curses>=2.3; sys_platform == 'win32'",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console :: Curses",
     "Intended Audience :: System Administrators",
     "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",

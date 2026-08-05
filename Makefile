@@ -8,7 +8,9 @@ ifeq ($(UNAME),Linux)
 else ifeq ($(UNAME),Darwin)
 	SYSTEM := macos
 else
-	$(error Unsupported platform: $(UNAME))
+	# The PyInstaller path is Linux/macOS only. Windows is supported through
+	# the package install instead, which pulls in windows-curses.
+	$(error Unsupported platform for "make": $(UNAME). Install with: pip install .)
 endif
 
 PYTHON        ?= python3

@@ -9,10 +9,14 @@ a table of the processes resident on each device.
 ## Requirements
 
 - Python 3.9 or newer
-- An NVIDIA driver providing `nvidia-smi` (used for all GPU telemetry)
+- An NVIDIA driver providing `nvidia-smi` on your `PATH` (all GPU telemetry)
 
 CPU statistics come from [psutil](https://github.com/giampaolo/psutil), which is
 installed automatically. No distro packages beyond Python are required.
+
+Linux and Windows are both supported. On Windows, `pip` additionally installs
+[windows-curses](https://pypi.org/project/windows-curses/), because CPython
+ships no `curses` module there.
 
 > Earlier versions shelled out to `mpstat` and needed the `sysstat` package.
 > That dependency is gone — if you installed `sysstat` only for `gtop`, you can
@@ -44,6 +48,25 @@ make install
 Override the destination with `make install BIN_DIR=~/.local/bin`.
 
 To update an existing install, `make uninstall && make install`.
+
+The Makefile targets are Linux/macOS only. On Windows, use the package install
+above.
+
+### Windows notes
+
+`pip install .` pulls in `windows-curses` automatically, and `nvidia-smi` is
+found on `PATH` like any other platform. Two behaviors differ:
+
+- Windows consoles do not deliver a resize event as reliably as a Unix
+  terminal. The layout still adapts, but on the next refresh rather than
+  instantly — lower `-l` if you want it to keep up more closely.
+- PDCurses (which `windows-curses` wraps) cannot inherit the terminal's
+  background color, so `gtop` falls back to an explicit black background
+  rather than losing color entirely.
+
+Use [Windows Terminal](https://aka.ms/terminal) if you can. The default bars and
+rules use box-drawing characters, which legacy `conhost` may render as garbage
+under a non-UTF-8 code page; `-f` selects an ASCII fill if needed.
 
 ## Usage
 
