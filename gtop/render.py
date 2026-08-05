@@ -42,6 +42,33 @@ HSCROLL_STEP = 4
 #: renderer falls back to an explicit black background.
 _INHERIT_BACKGROUND = -1
 
+#: ASCII stand-ins for the glyphs gtop draws. curses encodes strings with
+#: the locale's encoding, so on a legacy Windows code page (cp1252 and
+#: friends) the block and box-drawing characters are unencodable.
+_ASCII_FALLBACK = str.maketrans({"█": "#", "─": "-"})
+
+
+def _addstr(pad: curses.window, y: int, x: int, text: str, attr: int) -> None:
+    """Write ``text`` into ``pad``, degrading rather than raising.
+
+    Two failures are expected and neither should take down the render loop:
+    writing past the pad's last cell (truncation at the content edge is the
+    intended behavior), and text the terminal's encoding cannot represent,
+    which is retried as ASCII.
+    """
+    try:
+        pad.addstr(y, x, text, attr)
+    except curses.error:
+        pass
+    except UnicodeEncodeError:
+        ascii_text = (
+            text.translate(_ASCII_FALLBACK).encode("ascii", "replace").decode("ascii")
+        )
+        # The retry is pure ASCII, so any ASCII-compatible codec accepts it.
+        # Suppress anyway: a glyph must never be able to kill the render loop.
+        with contextlib.suppress(curses.error, UnicodeEncodeError):
+            pad.addstr(y, x, ascii_text, attr)
+
 
 class CursesRenderer:
     """Draws a :data:`Frame` into a curses window, with scrolling support."""
@@ -109,14 +136,7 @@ class CursesRenderer:
             for seg in line:
                 if not seg.text:
                     continue
-                # Writing to the last cell of a pad raises; truncation at
-                # the content edge is the desired behavior here. Kept as a bare
-                # try/except rather than contextlib.suppress: this runs once
-                # per segment per frame.
-                try:  # noqa: SIM105
-                    pad.addstr(y, x, seg.text, self._attr(seg.color))
-                except curses.error:
-                    pass
+                _addstr(pad, y, x, seg.text, self._attr(seg.color))
                 x += len(seg.text)
 
         self._blit()

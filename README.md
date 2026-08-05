@@ -64,9 +64,10 @@ found on `PATH` like any other platform. Two behaviors differ:
   background color, so `gtop` falls back to an explicit black background
   rather than losing color entirely.
 
-Use [Windows Terminal](https://aka.ms/terminal) if you can. The default bars and
-rules use box-drawing characters, which legacy `conhost` may render as garbage
-under a non-UTF-8 code page; `-f` selects an ASCII fill if needed.
+Use [Windows Terminal](https://aka.ms/terminal) if you can. The bars and rules
+use box-drawing characters, which a legacy code page cannot represent; on those
+consoles `gtop` automatically substitutes `#` and `-` rather than failing, and
+`-f` lets you pick an ASCII fill explicitly.
 
 ## Usage
 

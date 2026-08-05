@@ -177,6 +177,46 @@ class TestDraw:
         monkeypatch.setattr(pads[-1], "addstr", _boom)
         r.draw([(plain("y"),)])  # must not raise
 
+    def test_unencodable_text_is_redrawn_as_ascii(self, renderer, monkeypatch):
+        """curses encodes with the locale's encoding; cp1252 has no U+2588."""
+        r, _, pads = renderer
+        r.draw([(plain("x"),)])
+        pad = pads[-1]
+        real_addstr = pad.addstr
+
+        def _codepage_limited(y, x, text, attr=0):
+            text.encode("cp1252")  # raises UnicodeEncodeError for █ and ─
+            real_addstr(y, x, text, attr)
+
+        monkeypatch.setattr(pad, "addstr", _codepage_limited)
+        r.draw([(plain("███ ─── ok"),)])
+        assert [w[2] for w in pad.writes] == ["### --- ok"]
+
+    def test_unencodable_text_falls_back_to_question_marks(self, renderer, monkeypatch):
+        """Glyphs with no ASCII stand-in still render rather than vanishing."""
+        r, _, pads = renderer
+        r.draw([(plain("x"),)])
+        pad = pads[-1]
+        real_addstr = pad.addstr
+
+        def _ascii_only(y, x, text, attr=0):
+            text.encode("ascii")
+            real_addstr(y, x, text, attr)
+
+        monkeypatch.setattr(pad, "addstr", _ascii_only)
+        r.draw([(plain("café"),)])
+        assert [w[2] for w in pad.writes] == ["caf?"]
+
+    def test_a_second_encoding_failure_does_not_propagate(self, renderer, monkeypatch):
+        r, _, pads = renderer
+        r.draw([(plain("x"),)])
+
+        def _always_fails(y, x, text, attr=0):
+            raise UnicodeEncodeError("ascii", text, 0, 1, "nope")
+
+        monkeypatch.setattr(pads[-1], "addstr", _always_fails)
+        r.draw([(plain("█"),)])  # must not raise
+
     def test_pad_is_large_enough_for_the_content(self, renderer):
         r, _, pads = renderer
         r.draw([(plain("x" * 200),)] * 50)

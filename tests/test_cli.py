@@ -319,19 +319,50 @@ class TestRunLoop:
         assert cpu.calls == 0
 
 
+def _run_help(env_extra=None):
+    """Run ``python -m gtop --help`` in a subprocess and return the result."""
+    import os
+    import subprocess
+    import sys
+
+    env = dict(os.environ)
+    env.pop("PYTHONIOENCODING", None)
+    env.update(env_extra or {})
+    return subprocess.run(
+        [sys.executable, "-m", "gtop", "--help"],
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+        env=env,
+    )
+
+
 class TestModuleEntryPoint:
     def test_python_dash_m_gtop_runs(self):
-        import subprocess
-        import sys
-
-        result = subprocess.run(
-            [sys.executable, "-m", "gtop", "--help"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        assert result.returncode == 0
+        result = _run_help()
+        assert result.returncode == 0, result.stderr
         assert "usage: gtop" in result.stdout
+
+    def test_help_lists_the_block_fill_char(self):
+        assert BLOCK_CHAR in _run_help().stdout
+
+    def test_help_survives_a_legacy_single_byte_code_page(self):
+        """Regression: piping --help on Windows died on the block char.
+
+        Windows uses the ANSI code page for redirected stdout, and cp1252
+        cannot encode U+2588. PYTHONIOENCODING reproduces that here on any
+        platform.
+        """
+        result = _run_help({"PYTHONIOENCODING": "cp1252"})
+        assert result.returncode == 0, result.stderr
+        assert "UnicodeEncodeError" not in result.stderr
+        assert "usage: gtop" in result.stdout
+
+    @pytest.mark.parametrize("encoding", ["cp1252", "cp437", "ascii", "latin-1"])
+    def test_help_survives_any_ascii_compatible_encoding(self, encoding):
+        result = _run_help({"PYTHONIOENCODING": encoding})
+        assert result.returncode == 0, result.stderr
 
 
 class TestMainErrorPaths:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import curses
 import sys
 from collections.abc import Sequence
@@ -177,7 +178,26 @@ def _run(stdscr: curses.window, args: argparse.Namespace) -> int:
             needs_refresh = True
 
 
+def _use_utf8_output() -> None:
+    """Make text output encodable whatever the console code page is.
+
+    Windows falls back to the ANSI code page (usually cp1252) for stdout
+    whenever it is redirected rather than attached to a console. The help
+    text contains the block character used for the default bar fill, so
+    without this a piped ``gtop --help`` dies with UnicodeEncodeError.
+    ``errors="replace"`` keeps that true even for encodings UTF-8 cannot
+    be substituted for.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue  # Not a TextIOWrapper (pytest capture, a StringIO, ...).
+        with contextlib.suppress(Exception):
+            reconfigure(encoding="utf-8", errors="replace")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    _use_utf8_output()
     args = _build_parser().parse_args(argv)
     try:
         return curses.wrapper(_run, args)
